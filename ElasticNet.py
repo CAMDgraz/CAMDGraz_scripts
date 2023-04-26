@@ -1,0 +1,135 @@
+#!/bin/env/ python3
+# -*- coding: utf-8 -*-
+"""
+@author: Daniel Platero Rochart [daniel.platero-rochart@medunigraz.at]
+"""
+
+import numpy as np
+import pandas as pd
+import joblib
+import sys
+import matplotlib.pyplot as plt
+
+from sklearn.linear_model import ElasticNet
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import RepeatedKFold
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.model_selection import GridSearchCV
+
+sys.path.append('/home/daniel/Documents/Software/scripts_toolkit/')
+import General.plots as plots  # noqa
+
+
+def read_matrix(matrix_file, process):
+    """
+    Read matrix with the independent variables in the first column
+
+    Parameters:
+        matrix_file: str
+            Path to the matrix file
+
+    Returns:
+        X: np.array
+            Numpy array containing the dependent variables
+        Y: np.array
+            Numpy array containing the independent variables
+    """
+    if process == 'train':
+        matrix = pd.read_csv(matrix_file, sep=',', header=None)
+        Y = np.asarray(matrix.iloc[:, 0]).reshape((len(matrix), 1))
+        X = np.asarray(matrix.iloc[:, 1:])
+        return X, Y
+
+    if process == 'predict':
+        matrix = pd.read_csv(matrix_file, sep=',', header=None)
+        X = np.asarray(matrix.iloc[:, :])
+        return X
+
+
+# Training --------------------------------------------------------------------
+if str(sys.argv[1]) == 'train':
+    print('Training using matrix: {}'.format(str(sys.argv[2])))
+    # -- reading csv matrix ---------------------------------------------------
+    X, Y = read_matrix(str(sys.argv[2]), 'train')
+
+    # =========================================================================
+    # Pre-process of the input data
+    # =========================================================================
+    # -- split of the data ----------------------------------------------------
+    X_train, X_valid, Y_train, Y_valid = train_test_split(X, Y,
+                                                          random_state=42)
+    # -- standarization -------------------------------------------------------
+    X_train_s = (X_train - np.mean(X_train))/np.std(X_train)
+    X_valid_s = (X_valid - np.mean(X_valid))/np.std(X_valid)
+
+    # =========================================================================
+    # Grid Search with Cross validation for hyperparameters determination
+    # =========================================================================
+    # -- repeated k-fold setup ------------------------------------------------
+    r_kf = RepeatedKFold(n_splits=5, n_repeats=5, random_state=42)
+    model = ElasticNet()
+
+    # -- grid search with cv invluded -----------------------------------------
+    parameters = {'alpha': [1e-4, 1e-3, 1e-2, 0.1, 1],
+                  'l1_ratio': np.logspace(0, 1, 0.1)}
+
+    grid_search = GridSearchCV(estimator=model, param_grid=parameters,
+                               scoring='r2', cv=r_kf, verbose=1, n_jobs=10,
+                               return_train_score=True)
+
+    grid_search.fit(X_train_s, Y_train)  # Performing GridSearchCV
+    print('\nBest Estimator: \n'
+          ' {}\nBest Score: '
+          ' {}'.format(grid_search.best_estimator_, grid_search.best_score_))
+
+    # =========================================================================
+    # Apply model in the test validation data
+    # =========================================================================
+    # -- prediction -----------------------------------------------------------
+    model = grid_search.best_estimator_
+    model.fit(X_train_s, Y_train)
+    prediction = model.predict(X_valid_s)
+
+    # -- scoring and metrics --------------------------------------------------
+    print('\nMAE: {}'.format(mean_absolute_error(Y_valid, prediction)))
+    print('RMSE: {}'.format(np.sqrt(mean_squared_error(Y_valid, prediction))))
+    print('R2: {}'.format(r2_score(Y_valid, prediction)))
+
+    # -- saving results -------------------------------------------------------
+    joblib.dump(model, 'EN_model.sav')
+
+    r_prediction = np.reshape(prediction, [prediction.shape[0],])
+    r_Y_valid = np.reshape(Y_valid, [Y_valid.shape[0],])
+    with open('prediction.dat', 'w') as pred_out:
+        pred_out.write('Prediction using model saved as'
+                       ' {}\n'.format('EN_model'))
+        pred_out.write('Validation   Prediction\n')
+        for real, pred in zip(r_Y_valid, r_prediction):
+            pred_out.write('{:>10.2f}   {:>10.2f}\n'.format(real, pred))
+
+    plots.general_canvas([12, 8], 300)
+    fig, ax = plt.subplots()
+    ax.scatter(r_prediction, r_Y_valid, color='black', marker='x')
+    ax.set_xlabel(r'Prediction')
+    ax.set_ylabel(r'Validation')
+    # -- linear plot ----------------------------------------------------------
+    min_val = np.concatenate((r_prediction, r_Y_valid), axis=None).min()
+    max_val = np.concatenate((r_prediction, r_Y_valid), axis=None).max()
+    ax.plot(np.arange(min_val - 1, max_val + 2, 1),
+            np.arange(min_val - 1, max_val + 2, 1), color='blue')
+    ax.set_xlim(min_val - 1, max_val + 1)
+    ax.set_ylim(min_val - 1, max_val + 1)
+    fig.savefig('en_train.png')
+
+
+if str(sys.argv[1]) == 'predict':
+    print('Predicting using model: {}'.format(str(sys.argv[2])))
+    # -- Loading model and features -------------------------------------------
+    model = joblib.load('EN_model.sav')
+    X = read_matrix(str(sys.argv[2]), 'predict')
+    # -- Standarization -------------------------------------------------------
+    X_pred_s = (X - np.mean(X))/np.std(X)
+
+    # -- Prediction -----------------------------------------------------------
+    prediction = model.predict(X_pred_s)
+    joblib.dump(prediction, 'predictions.sav')
