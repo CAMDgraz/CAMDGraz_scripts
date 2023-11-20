@@ -91,7 +91,7 @@ if str(sys.argv[1]) == 'train':
 
     # -- grid search with cv invluded -----------------------------------------
     parameters = {'alpha': [1e-4, 1e-3, 1e-2, 0.1, 1],
-                  'l1_ratio': np.logspace(0, 1, 0.1)}
+                  'l1_ratio': np.arange(0, 1, 0.01)}
 
     grid_search = GridSearchCV(estimator=model, param_grid=parameters,
                                scoring='r2', cv=r_kf, verbose=1, n_jobs=10,
