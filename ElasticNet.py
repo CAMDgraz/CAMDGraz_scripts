@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import joblib
 import sys
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from sklearn.linear_model import ElasticNet
@@ -16,8 +17,27 @@ from sklearn.model_selection import RepeatedKFold
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from sklearn.model_selection import GridSearchCV
 
-sys.path.append('/home/daniel/Documents/Software/scripts_toolkit/')
-import General.plots as plots  # noqa
+def general_canvas(figsize, dpi):
+    """
+    Customization of plots
+
+    Returns:
+        None
+    """
+    mpl.rc('figure', figsize=figsize, dpi=dpi)
+    mpl.rc('xtick', direction='in', top=False)
+    mpl.rc('xtick.major', top=False)
+    mpl.rc('xtick.minor', top=False)
+    mpl.rc('ytick', direction='in', right=True)
+    mpl.rc('ytick.major', right= False)
+    mpl.rc('ytick.minor', right=False)
+    mpl.rc('axes', labelsize=20)
+    plt.rcParams['axes.autolimit_mode'] = 'data'
+    mpl.rc('lines', linewidth=2, color='k')
+    mpl.rc('font', family='monospace', size=20)
+    mpl.rc('grid', alpha=0.5, color='gray', linewidth=1, linestyle='--')
+
+    return
 
 
 def read_matrix(matrix_file, process):
@@ -107,7 +127,7 @@ if str(sys.argv[1]) == 'train':
         for real, pred in zip(r_Y_valid, r_prediction):
             pred_out.write('{:>10.2f}   {:>10.2f}\n'.format(real, pred))
 
-    plots.general_canvas([12, 8], 300)
+    general_canvas([12, 8], 300)
     fig, ax = plt.subplots()
     ax.scatter(r_prediction, r_Y_valid, color='black', marker='x')
     ax.set_xlabel(r'Prediction')
